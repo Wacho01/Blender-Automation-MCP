@@ -10,8 +10,8 @@ Control Blender from any AI assistant using the [Model Context Protocol (MCP)](h
 
 ```
 ┌─────────────┐      stdio       ┌──────────────────┐    JSON/TCP     ┌─────────────────┐
-│  MCP Client  │ ◄──────────────► │  MCP Server      │ ◄─────────────► │  Blender Add-on │
-│  (any host)  │                  │  (Python)        │  localhost:9876 │  (runs in bpy)  │
+│  MCP Client │ ◄──────────────► │  MCP Server      │ ◄─────────────► │  Blender Add-on │
+│  (any host) │                  │  (Python)        │  localhost:9876 │  (runs in bpy)  │
 └─────────────┘                  └──────────────────┘                 └─────────────────┘
 ```
 
