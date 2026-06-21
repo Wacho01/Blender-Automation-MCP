@@ -4,6 +4,7 @@ import os
 import sys
 import tempfile
 import threading
+import types
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,6 +13,10 @@ import pytest
 def _create_mock_bpy():
     """Create a mock bpy module for testing outside Blender."""
     bpy = MagicMock()
+    handlers_module = types.ModuleType("bpy.app.handlers")
+    handlers_module.load_post = []
+    handlers_module.persistent = lambda fn: fn
+    bpy.app.handlers = handlers_module
 
     # Mock scene
     scene = MagicMock()
@@ -58,6 +63,7 @@ def _create_mock_bpy():
     bpy.context.preferences = MagicMock()
     bpy.context.preferences.addons = {}
     bpy.app.timers.register = MagicMock()
+    bpy.app.timers.is_registered = MagicMock(return_value=False)
     bpy.ops.ed.undo_push.poll.return_value = False
     bpy.path.abspath = lambda path: path
 
@@ -82,12 +88,19 @@ def _create_mock_bpy():
 def mock_bpy():
     """Install mock bpy before importing the addon."""
     mock = _create_mock_bpy()
+    app_module = types.ModuleType("bpy.app")
+    app_module.handlers = mock.app.handlers
+    app_module.timers = mock.app.timers
     sys.modules["bpy"] = mock
+    sys.modules["bpy.app"] = app_module
+    sys.modules["bpy.app.handlers"] = mock.app.handlers
     # Also mock mathutils since it's used in the execution namespace
     if "mathutils" not in sys.modules:
         sys.modules["mathutils"] = MagicMock()
     yield mock
     del sys.modules["bpy"]
+    del sys.modules["bpy.app"]
+    del sys.modules["bpy.app.handlers"]
     if "mathutils" in sys.modules and isinstance(sys.modules["mathutils"], MagicMock):
         del sys.modules["mathutils"]
 
@@ -205,6 +218,31 @@ class TestServerExecution:
 
         assert response_holder["response"] == expected
         process.assert_called_once_with(request)
+
+    def test_request_queue_timer_is_registered_persistent(self, addon_module, mock_bpy):
+        server = addon_module.BlenderMCPServer()
+
+        server._register_request_queue_timer()
+
+        mock_bpy.app.timers.register.assert_called_once_with(
+            server._drain_timer_callback,
+            first_interval=0.01,
+            persistent=True,
+        )
+
+    def test_ensure_server_running_reregisters_timer_for_healthy_server(self, addon_module):
+        server = addon_module.BlenderMCPServer()
+        server._running = True
+        server._server_socket = object()
+        server._thread = MagicMock()
+        server._thread.is_alive.return_value = True
+        server._register_request_queue_timer = MagicMock()
+        addon_module._server = server
+
+        result = addon_module._ensure_server_running()
+
+        assert result is None
+        server._register_request_queue_timer.assert_called_once_with()
 
     def test_python_execute_does_not_auto_push_undo(self, addon_module, mock_bpy):
         server = addon_module.BlenderMCPServer()
