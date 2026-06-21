@@ -57,9 +57,8 @@ class BridgeParams:
             raise ValueError(f"Parameter '{name}' must be a boolean")
         if expected == "dict" and not isinstance(value, dict):
             raise ValueError(f"Parameter '{name}' must be an object")
-        if expected == "int":
-            if not isinstance(value, int) or isinstance(value, bool):
-                raise ValueError(f"Parameter '{name}' must be an integer")
+        if expected == "int" and (not isinstance(value, int) or isinstance(value, bool)):
+            raise ValueError(f"Parameter '{name}' must be an integer")
         if expected == "float":
             if not isinstance(value, (int, float)) or isinstance(value, bool):
                 raise ValueError(f"Parameter '{name}' must be a number")
