@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-06-21
+
 ### Added
 - CI pipeline (`ci.yml`): ruff lint, ruff format, mypy, pytest with coverage across Python 3.10–3.13.
 - Publish workflow now gates on CI passing before releasing to PyPI.
@@ -23,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Import sorting and formatting across all source files.
 - Ambiguous variable names flagged by ruff (`l` → `line`, `label`).
 - Replaced bare `try/except pass` with `contextlib.suppress` in headless executor.
+- Kept the Blender bridge request queue timer alive across `.blend` file loads.
 
 ## [0.1.1] — 2026-03-08
 
@@ -47,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Architecture documentation and Python execution design spec.
 - Unit tests for MCP server and add-on (mocked `bpy`).
 
-[Unreleased]: https://github.com/djeada/blender-mcp-server/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/djeada/blender-mcp-server/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/djeada/blender-mcp-server/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/djeada/blender-mcp-server/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/djeada/blender-mcp-server/releases/tag/v0.1.0
