@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.3] — 2026-06-21
+
+### Fixed
+- Packaged `models.py` in the Blender add-on zip.
+- Removed the Blender add-on's runtime dependency on third-party validation packages.
+- Switched the add-on model import to package-relative import for installed zip compatibility.
+
 ## [0.1.2] — 2026-06-21
 
 ### Added
@@ -50,7 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Architecture documentation and Python execution design spec.
 - Unit tests for MCP server and add-on (mocked `bpy`).
 
-[Unreleased]: https://github.com/djeada/blender-mcp-server/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/djeada/blender-mcp-server/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/djeada/blender-mcp-server/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/djeada/blender-mcp-server/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/djeada/blender-mcp-server/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/djeada/blender-mcp-server/releases/tag/v0.1.0

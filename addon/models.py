@@ -1,124 +1,218 @@
-"""Pydantic models for bridge command parameter validation.
+"""Small standard-library validators for bridge command parameters.
 
-Each model corresponds to a command accepted by the Blender add-on bridge.
-The CommandHandler calls ``model.model_validate(params)`` on incoming dicts
-so that invalid or missing fields are caught early with clear error messages.
+Blender add-ons run inside Blender's bundled Python, so they cannot assume
+third-party packages are installed. These classes intentionally expose the
+tiny validation API used by the command handler:
+``model_validate(params).model_dump(exclude_none=True)``.
 """
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from copy import deepcopy
+from typing import Any
 
-# ── Scene / inspection ─────────────────────────────────────────────
-
-
-class SceneListObjectsParams(BaseModel):
-    type: str | None = Field(None, description="Blender object type filter (MESH, CAMERA, LIGHT, …)")
+MISSING = object()
 
 
-class ObjectGetTransformParams(BaseModel):
-    name: str = Field(..., description="Name of the object")
+class BridgeParams:
+    fields: dict[str, dict[str, Any]] = {}
+
+    def __init__(self, values: dict[str, Any]):
+        self._values = values
+
+    @classmethod
+    def model_validate(cls, params: dict | None):
+        if params is None:
+            params = {}
+        if not isinstance(params, dict):
+            raise ValueError(f"{cls.__name__} parameters must be an object")
+
+        values: dict[str, Any] = {}
+        for name, spec in cls.fields.items():
+            value = params.get(name, MISSING)
+            if value is MISSING:
+                if spec.get("required", False):
+                    raise ValueError(f"Missing required parameter: {name}")
+                if "default_factory" in spec:
+                    value = spec["default_factory"]()
+                elif "default" in spec:
+                    value = deepcopy(spec["default"])
+                else:
+                    value = None
+            values[name] = cls._validate_field(name, value, spec)
+
+        return cls(values)
+
+    @staticmethod
+    def _validate_field(name: str, value: Any, spec: dict[str, Any]) -> Any:
+        if value is None:
+            if spec.get("allow_none", False):
+                return None
+            raise ValueError(f"Parameter '{name}' is required")
+
+        expected = spec.get("type")
+        if expected == "str" and not isinstance(value, str):
+            raise ValueError(f"Parameter '{name}' must be a string")
+        if expected == "bool" and not isinstance(value, bool):
+            raise ValueError(f"Parameter '{name}' must be a boolean")
+        if expected == "dict" and not isinstance(value, dict):
+            raise ValueError(f"Parameter '{name}' must be an object")
+        if expected == "int":
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise ValueError(f"Parameter '{name}' must be an integer")
+        if expected == "float":
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                raise ValueError(f"Parameter '{name}' must be a number")
+            value = float(value)
+        if expected == "number_list":
+            if not isinstance(value, list):
+                raise ValueError(f"Parameter '{name}' must be a list")
+            min_length = spec.get("min_length")
+            max_length = spec.get("max_length")
+            if min_length is not None and len(value) < min_length:
+                raise ValueError(f"Parameter '{name}' must have at least {min_length} items")
+            if max_length is not None and len(value) > max_length:
+                raise ValueError(f"Parameter '{name}' must have at most {max_length} items")
+            if any(not isinstance(item, (int, float)) or isinstance(item, bool) for item in value):
+                raise ValueError(f"Parameter '{name}' must contain only numbers")
+            value = [float(item) for item in value]
+
+        if spec.get("gt") is not None and value <= spec["gt"]:
+            raise ValueError(f"Parameter '{name}' must be greater than {spec['gt']}")
+        return value
+
+    def model_dump(self, exclude_none: bool = False) -> dict[str, Any]:
+        if exclude_none:
+            return {key: value for key, value in self._values.items() if value is not None}
+        return dict(self._values)
 
 
-class ObjectGetHierarchyParams(BaseModel):
-    name: str | None = Field(None, description="Root object name; omit for full scene tree")
+def field(
+    field_type: str,
+    default: Any = None,
+    *,
+    required: bool = False,
+    allow_none: bool = False,
+    default_factory=None,
+    min_length: int | None = None,
+    max_length: int | None = None,
+    gt: float | int | None = None,
+) -> dict[str, Any]:
+    spec = {
+        "type": field_type,
+        "required": required,
+        "allow_none": allow_none,
+        "min_length": min_length,
+        "max_length": max_length,
+        "gt": gt,
+    }
+    if default_factory is not None:
+        spec["default_factory"] = default_factory
+    elif required:
+        pass
+    else:
+        spec["default"] = default
+    return spec
 
 
-# ── Object mutation ────────────────────────────────────────────────
+class SceneListObjectsParams(BridgeParams):
+    fields = {"type": field("str", allow_none=True)}
 
 
-class ObjectCreateMeshParams(BaseModel):
-    type: str = Field("cube", description="Primitive type: cube, sphere, cylinder, plane, cone, torus")
-    name: str | None = Field(None, description="Optional object name")
-    location: list[float] = Field(
-        default_factory=lambda: [0, 0, 0], description="World-space [x, y, z]", min_length=3, max_length=3
-    )
-    size: float = Field(2.0, gt=0, description="Uniform scale factor")
+class ObjectGetTransformParams(BridgeParams):
+    fields = {"name": field("str", required=True)}
 
 
-class ObjectDeleteParams(BaseModel):
-    name: str
+class ObjectGetHierarchyParams(BridgeParams):
+    fields = {"name": field("str", allow_none=True)}
 
 
-class ObjectTranslateParams(BaseModel):
-    name: str
-    location: list[float] | None = Field(None, description="Absolute position [x, y, z]", min_length=3, max_length=3)
-    offset: list[float] | None = Field(None, description="Relative offset [x, y, z]", min_length=3, max_length=3)
+class ObjectCreateMeshParams(BridgeParams):
+    fields = {
+        "type": field("str", "cube"),
+        "name": field("str", allow_none=True),
+        "location": field("number_list", default_factory=lambda: [0, 0, 0], min_length=3, max_length=3),
+        "size": field("float", 2.0, gt=0),
+    }
 
 
-class ObjectRotateParams(BaseModel):
-    name: str
-    rotation: list[float] = Field(
-        default_factory=lambda: [0, 0, 0], description="Euler angles [x, y, z]", min_length=3, max_length=3
-    )
-    degrees: bool = Field(True, description="Interpret rotation as degrees (True) or radians (False)")
+class ObjectDeleteParams(BridgeParams):
+    fields = {"name": field("str", required=True)}
 
 
-class ObjectScaleParams(BaseModel):
-    name: str
-    scale: list[float] = Field(
-        default_factory=lambda: [1, 1, 1], description="Scale [x, y, z]", min_length=3, max_length=3
-    )
+class ObjectTranslateParams(BridgeParams):
+    fields = {
+        "name": field("str", required=True),
+        "location": field("number_list", allow_none=True, min_length=3, max_length=3),
+        "offset": field("number_list", allow_none=True, min_length=3, max_length=3),
+    }
 
 
-class ObjectDuplicateParams(BaseModel):
-    name: str
-    new_name: str | None = Field(None, description="Name for the copy")
+class ObjectRotateParams(BridgeParams):
+    fields = {
+        "name": field("str", required=True),
+        "rotation": field("number_list", default_factory=lambda: [0, 0, 0], min_length=3, max_length=3),
+        "degrees": field("bool", True),
+    }
 
 
-# ── Materials ──────────────────────────────────────────────────────
+class ObjectScaleParams(BridgeParams):
+    fields = {
+        "name": field("str", required=True),
+        "scale": field("number_list", default_factory=lambda: [1, 1, 1], min_length=3, max_length=3),
+    }
 
 
-class MaterialCreateParams(BaseModel):
-    name: str
-    color: list[float] | None = Field(None, description="Base color [r, g, b] in 0-1 range", min_length=3, max_length=3)
+class ObjectDuplicateParams(BridgeParams):
+    fields = {"name": field("str", required=True), "new_name": field("str", allow_none=True)}
 
 
-class MaterialAssignParams(BaseModel):
-    object: str = Field(..., description="Target object name")
-    material: str = Field(..., description="Material name")
+class MaterialCreateParams(BridgeParams):
+    fields = {"name": field("str", required=True), "color": field("number_list", allow_none=True, min_length=3, max_length=3)}
 
 
-class MaterialSetColorParams(BaseModel):
-    material: str
-    color: list[float] = Field(..., description="[r, g, b] in 0-1 range", min_length=3, max_length=3)
+class MaterialAssignParams(BridgeParams):
+    fields = {"object": field("str", required=True), "material": field("str", required=True)}
 
 
-class MaterialSetTextureParams(BaseModel):
-    material: str
-    path: str = Field(..., description="Image file path")
+class MaterialSetColorParams(BridgeParams):
+    fields = {"material": field("str", required=True), "color": field("number_list", required=True, min_length=3, max_length=3)}
 
 
-# ── Rendering & export ─────────────────────────────────────────────
+class MaterialSetTextureParams(BridgeParams):
+    fields = {"material": field("str", required=True), "path": field("str", required=True)}
 
 
-class RenderStillParams(BaseModel):
-    output_path: str = Field("//render.png")
-    resolution_x: int | None = Field(None, gt=0)
-    resolution_y: int | None = Field(None, gt=0)
-    engine: str | None = Field(None, description="Render engine name (e.g. CYCLES, BLENDER_EEVEE)")
+class RenderStillParams(BridgeParams):
+    fields = {
+        "output_path": field("str", "//render.png"),
+        "resolution_x": field("int", allow_none=True, gt=0),
+        "resolution_y": field("int", allow_none=True, gt=0),
+        "engine": field("str", allow_none=True),
+    }
 
 
-class RenderAnimationParams(BaseModel):
-    output_path: str = Field("//render_")
-    frame_start: int | None = None
-    frame_end: int | None = None
-    engine: str | None = None
+class RenderAnimationParams(BridgeParams):
+    fields = {
+        "output_path": field("str", "//render_"),
+        "frame_start": field("int", allow_none=True),
+        "frame_end": field("int", allow_none=True),
+        "engine": field("str", allow_none=True),
+    }
 
 
-class ExportFileParams(BaseModel):
-    filepath: str
+class ExportFileParams(BridgeParams):
+    fields = {"filepath": field("str", required=True)}
 
 
-# ── Python execution ───────────────────────────────────────────────
+class PythonExecuteParams(BridgeParams):
+    fields = {
+        "code": field("str", allow_none=True),
+        "script_path": field("str", allow_none=True),
+        "args": field("dict", allow_none=True),
+        "timeout_seconds": field("float", allow_none=True, gt=0),
+    }
 
 
-class PythonExecuteParams(BaseModel):
-    code: str | None = Field(None, description="Inline Python code")
-    script_path: str | None = Field(None, description="Path to a .py script file")
-    args: dict | None = Field(None, description="Keyword arguments passed to the script namespace")
-    timeout_seconds: float | None = Field(None, gt=0)
-
-
-class JobIdParams(BaseModel):
-    job_id: str
+class JobIdParams(BridgeParams):
+    fields = {"job_id": field("str", required=True)}

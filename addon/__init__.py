@@ -28,7 +28,7 @@ from typing import Any
 import bpy
 from bpy.app.handlers import persistent
 
-from addon.models import (
+from .models import (
     ExportFileParams,
     JobIdParams,
     MaterialAssignParams,
