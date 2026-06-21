@@ -167,7 +167,10 @@ class ObjectDuplicateParams(BridgeParams):
 
 
 class MaterialCreateParams(BridgeParams):
-    fields = {"name": field("str", required=True), "color": field("number_list", allow_none=True, min_length=3, max_length=3)}
+    fields = {
+        "name": field("str", required=True),
+        "color": field("number_list", allow_none=True, min_length=3, max_length=3),
+    }
 
 
 class MaterialAssignParams(BridgeParams):
@@ -175,7 +178,10 @@ class MaterialAssignParams(BridgeParams):
 
 
 class MaterialSetColorParams(BridgeParams):
-    fields = {"material": field("str", required=True), "color": field("number_list", required=True, min_length=3, max_length=3)}
+    fields = {
+        "material": field("str", required=True),
+        "color": field("number_list", required=True, min_length=3, max_length=3),
+    }
 
 
 class MaterialSetTextureParams(BridgeParams):
