@@ -1111,9 +1111,11 @@ class BlenderMCPServer:
         self._port = PORT
         self._handler = CommandHandler()
         self._request_queue: queue.Queue[dict[str, Any]] = queue.Queue()
+        self._drain_timer_callback = self._drain_request_queue
 
     def start(self):
         if self._running:
+            self._register_request_queue_timer()
             return
         _sync_runtime_settings()
         self._host = HOST
@@ -1139,8 +1141,24 @@ class BlenderMCPServer:
         self._server_socket.listen(1)
         self._thread = threading.Thread(target=self._accept_loop, daemon=True)
         self._thread.start()
-        bpy.app.timers.register(self._drain_request_queue, first_interval=0.01)
+        self._register_request_queue_timer()
         logger.info(f"Blender MCP Bridge listening on {self._host}:{self._port}")
+
+    def _register_request_queue_timer(self):
+        timers = bpy.app.timers
+        is_registered = getattr(timers, "is_registered", None)
+        if callable(is_registered):
+            try:
+                if is_registered(self._drain_timer_callback):
+                    return
+            except Exception:
+                logger.debug("Unable to check MCP Bridge queue timer registration", exc_info=True)
+        try:
+            timers.register(self._drain_timer_callback, first_interval=0.01, persistent=True)
+        except TypeError:
+            # Blender versions before the persistent timer flag still need the bridge to run.
+            timers.register(self._drain_timer_callback, first_interval=0.01)
+        logger.debug("Registered MCP Bridge request queue timer")
 
     def stop(self):
         self._running = False
@@ -1217,6 +1235,7 @@ class BlenderMCPServer:
 
     def _submit_request(self, request: dict) -> dict:
         queued = {"request": request, "event": threading.Event(), "response": None}
+        logger.debug("Enqueue MCP request id=%s command=%s", request.get("id"), request.get("command"))
         self._request_queue.put(queued)
         queued["event"].wait()
         return queued["response"]
@@ -1227,7 +1246,18 @@ class BlenderMCPServer:
                 queued = self._request_queue.get_nowait()
             except queue.Empty:
                 break
+            request = queued["request"]
+            logger.debug(
+                "Processing MCP request id=%s command=%s",
+                request.get("id"),
+                request.get("command"),
+            )
             queued["response"] = self._process_request(queued["request"])
+            logger.debug(
+                "Finished MCP request id=%s command=%s",
+                request.get("id"),
+                request.get("command"),
+            )
             queued["event"].set()
         return 0.01 if self._running else None
 
@@ -1273,6 +1303,7 @@ def _server_healthy() -> bool:
 def _ensure_server_running():
     global _server
     if _server_healthy():
+        _server._register_request_queue_timer()
         return None
     if _server:
         try:
