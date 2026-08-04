@@ -494,8 +494,15 @@ class TestPythonSandbox:
         assert addon_module.SAFE_MODE is True
         assert addon_module.PORT == 9988
         assert addon_module.ALLOW_INLINE_CODE is False
-        assert addon_module.APPROVED_SCRIPT_ROOTS == ["/tmp/a", "/tmp/b"]
-        assert addon_module.ALLOWED_PATHS == ["/tmp/a", "/tmp/b"]
+        assert [
+            os.path.abspath("/tmp/a"),
+            os.path.abspath("/tmp/b"),
+        ] == addon_module.APPROVED_SCRIPT_ROOTS
+
+        assert [
+            os.path.abspath("/tmp/a"),
+            os.path.abspath("/tmp/b"),
+        ] == addon_module.ALLOWED_PATHS
 
     def test_non_py_script_rejected(self, handler, addon_module):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -819,7 +826,7 @@ class TestDamBreakDemo:
         import ast
 
         path = os.path.join(self.DEMOS_DIR, "dam_break_scene.py")
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             ast.parse(f.read(), filename=path)
 
     def test_run_dam_break_parses(self):
@@ -827,14 +834,14 @@ class TestDamBreakDemo:
         import ast
 
         path = os.path.join(self.DEMOS_DIR, "run_dam_break.py")
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             ast.parse(f.read(), filename=path)
 
     def test_demo_scripts_avoid_mesh_primitive_operators(self):
         """Bridge-driven demo geometry should use data-API helpers, not bpy.ops primitives."""
         for filename in ("dam_break_scene.py", "run_dam_break.py"):
             path = os.path.join(self.DEMOS_DIR, filename)
-            with open(path) as f:
+            with open(path, encoding="utf-8") as f:
                 contents = f.read()
             assert "bpy.ops.mesh.primitive_" not in contents
 
@@ -949,5 +956,5 @@ class TestDamBreakDemo:
         import glob as globmod
 
         for path in sorted(globmod.glob(os.path.join(self.LIBRARY_DIR, "*.py"))):
-            with open(path) as f:
+            with open(path, encoding="utf-8") as f:
                 ast.parse(f.read(), filename=path)
