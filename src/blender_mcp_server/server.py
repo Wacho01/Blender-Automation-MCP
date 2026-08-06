@@ -659,8 +659,19 @@ __result__ = {
     description="Export the scene as glTF/GLB. Provide the output file path.",
 )
 async def export_gltf(ctx: Context, filepath: str) -> str:
-    result = await _get_conn(ctx).send_command("export.gltf", {"filepath": filepath})
-    return json.dumps(result, indent=2)
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="export.gltf",
+        parameters={"filepath": filepath},
+    )
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "export.gltf failed"
+        )
+
+    return json.dumps(result.result, indent=2)
 
 
 @mcp.tool(
@@ -668,8 +679,19 @@ async def export_gltf(ctx: Context, filepath: str) -> str:
     description="Export the scene as OBJ. Provide the output file path.",
 )
 async def export_obj(ctx: Context, filepath: str) -> str:
-    result = await _get_conn(ctx).send_command("export.obj", {"filepath": filepath})
-    return json.dumps(result, indent=2)
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="export.obj",
+        parameters={"filepath": filepath},
+    )
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "export.obj failed"
+        )
+
+    return json.dumps(result.result, indent=2)
 
 
 @mcp.tool(
@@ -677,8 +699,19 @@ async def export_obj(ctx: Context, filepath: str) -> str:
     description="Export the scene as FBX. Provide the output file path.",
 )
 async def export_fbx(ctx: Context, filepath: str) -> str:
-    result = await _get_conn(ctx).send_command("export.fbx", {"filepath": filepath})
-    return json.dumps(result, indent=2)
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="export.fbx",
+        parameters={"filepath": filepath},
+    )
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "export.fbx failed"
+        )
+
+    return json.dumps(result.result, indent=2)
 
 
 # -- History tools --
