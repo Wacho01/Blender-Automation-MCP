@@ -217,13 +217,28 @@ async def object_create(
     location: list[float] | None = None,
     size: float = 2.0,
 ) -> str:
-    params: dict[str, Any] = {"type": mesh_type, "size": size}
+    parameters: dict[str, Any] = {
+        "type": mesh_type,
+        "size": size,
+    }
     if name:
-        params["name"] = name
+        parameters["name"] = name
     if location:
-        params["location"] = location
-    result = await _get_conn(ctx).send_command("object.create_mesh", params)
-    return json.dumps(result, indent=2)
+        parameters["location"] = location
+
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="object.create_mesh",
+        parameters=parameters,
+    )
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "object.create_mesh failed"
+        )
+
+    return json.dumps(result.result, indent=2)
 
 
 @mcp.tool(
@@ -231,8 +246,19 @@ async def object_create(
     description="Delete an object from the Blender scene by name.",
 )
 async def object_delete(ctx: Context, name: str) -> str:
-    result = await _get_conn(ctx).send_command("object.delete", {"name": name})
-    return json.dumps(result, indent=2)
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="object.delete",
+        parameters={"name": name},
+    )
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "object.delete failed"
+        )
+
+    return json.dumps(result.result, indent=2)
 
 
 @mcp.tool(
@@ -245,13 +271,25 @@ async def object_translate(
     location: list[float] | None = None,
     offset: list[float] | None = None,
 ) -> str:
-    params: dict[str, Any] = {"name": name}
+    parameters: dict[str, Any] = {"name": name}
     if location:
-        params["location"] = location
+        parameters["location"] = location
     if offset:
-        params["offset"] = offset
-    result = await _get_conn(ctx).send_command("object.translate", params)
-    return json.dumps(result, indent=2)
+        parameters["offset"] = offset
+
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="object.translate",
+        parameters=parameters,
+    )
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "object.translate failed"
+        )
+
+    return json.dumps(result.result, indent=2)
 
 
 @mcp.tool(
@@ -264,10 +302,23 @@ async def object_rotate(
     rotation: list[float],
     degrees: bool = True,
 ) -> str:
-    result = await _get_conn(ctx).send_command(
-        "object.rotate", {"name": name, "rotation": rotation, "degrees": degrees}
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="object.rotate",
+        parameters={
+            "name": name,
+            "rotation": rotation,
+            "degrees": degrees,
+        },
     )
-    return json.dumps(result, indent=2)
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "object.rotate failed"
+        )
+
+    return json.dumps(result.result, indent=2)
 
 
 @mcp.tool(
@@ -275,20 +326,50 @@ async def object_rotate(
     description="Set the scale of an object. Provide scale as [x, y, z].",
 )
 async def object_scale(ctx: Context, name: str, scale: list[float]) -> str:
-    result = await _get_conn(ctx).send_command("object.scale", {"name": name, "scale": scale})
-    return json.dumps(result, indent=2)
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="object.scale",
+        parameters={
+            "name": name,
+            "scale": scale,
+        },
+    )
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "object.scale failed"
+        )
+
+    return json.dumps(result.result, indent=2)
 
 
 @mcp.tool(
     name="blender_object_duplicate",
     description="Duplicate an object in the Blender scene. Optionally provide a new name.",
 )
-async def object_duplicate(ctx: Context, name: str, new_name: str | None = None) -> str:
-    params: dict[str, Any] = {"name": name}
+async def object_duplicate(
+    ctx: Context,
+    name: str,
+    new_name: str | None = None,
+) -> str:
+    parameters: dict[str, Any] = {"name": name}
     if new_name:
-        params["new_name"] = new_name
-    result = await _get_conn(ctx).send_command("object.duplicate", params)
-    return json.dumps(result, indent=2)
+        parameters["new_name"] = new_name
+
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="object.duplicate",
+        parameters=parameters,
+    )
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "object.duplicate failed"
+        )
+
+    return json.dumps(result.result, indent=2)
 
 
 # -- Material tools --
