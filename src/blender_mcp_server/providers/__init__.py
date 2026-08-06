@@ -15,12 +15,14 @@ from blender_mcp_server.providers.registry import (
     ProviderRegistry,
     ProviderUnavailableError,
 )
+from blender_mcp_server.providers.router import CapabilityRouter
 
 __all__ = [
     "BLENDER_BRIDGE_CAPABILITIES",
     "BlenderBridgeProvider",
     "BlenderCommandConnection",
     "CapabilityProvider",
+    "CapabilityRouter",
     "ProviderAlreadyRegisteredError",
     "ProviderInfo",
     "ProviderNotFoundError",
