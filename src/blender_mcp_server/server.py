@@ -547,14 +547,30 @@ __result__ = {
             factory_startup=factory_startup,
         )
     else:
-        params: dict[str, Any] = {"output_path": output_path}
-        if resolution_x:
-            params["resolution_x"] = resolution_x
-        if resolution_y:
-            params["resolution_y"] = resolution_y
+        parameters: dict[str, Any] = {
+            "output_path": output_path,
+        }
+        if resolution_x is not None:
+            parameters["resolution_x"] = resolution_x
+        if resolution_y is not None:
+            parameters["resolution_y"] = resolution_y
         if engine:
-            params["engine"] = engine
-        result = await _get_conn(ctx).send_command("render.still", params)
+            parameters["engine"] = engine
+
+        request = ProviderRequest(
+            request_id=str(uuid.uuid4()),
+            capability_id="render.still",
+            parameters=parameters,
+        )
+        routed_result = await _get_router(ctx).execute(request)
+
+        if not routed_result.success:
+            raise RuntimeError(
+                routed_result.error or "render.still failed"
+            )
+
+        result = routed_result.result
+
     return json.dumps(result, indent=2)
 
 
@@ -608,14 +624,30 @@ __result__ = {
             factory_startup=factory_startup,
         )
     else:
-        params: dict[str, Any] = {"output_path": output_path}
+        parameters: dict[str, Any] = {
+            "output_path": output_path,
+        }
         if frame_start is not None:
-            params["frame_start"] = frame_start
+            parameters["frame_start"] = frame_start
         if frame_end is not None:
-            params["frame_end"] = frame_end
+            parameters["frame_end"] = frame_end
         if engine:
-            params["engine"] = engine
-        result = await _get_conn(ctx).send_command("render.animation", params)
+            parameters["engine"] = engine
+
+        request = ProviderRequest(
+            request_id=str(uuid.uuid4()),
+            capability_id="render.animation",
+            parameters=parameters,
+        )
+        routed_result = await _get_router(ctx).execute(request)
+
+        if not routed_result.success:
+            raise RuntimeError(
+                routed_result.error or "render.animation failed"
+            )
+
+        result = routed_result.result
+
     return json.dumps(result, indent=2)
 
 
