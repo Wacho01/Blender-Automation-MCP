@@ -10,6 +10,12 @@ from typing import Any
 from mcp.server.fastmcp import Context, FastMCP
 
 from blender_mcp_server.headless import HeadlessBlenderExecutor, HeadlessJobManager
+from blender_mcp_server.providers import (
+    BlenderBridgeProvider,
+    CapabilityRouter,
+    ProviderRegistry,
+    ProviderRequest,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +102,16 @@ def _get_conn(ctx: Context) -> BlenderConnection:
     return ctx.request_context.lifespan_context  # type: ignore[no-any-return]
 
 
+def _get_router(ctx: Context) -> CapabilityRouter:
+    registry = ProviderRegistry(
+        [BlenderBridgeProvider(_get_conn(ctx))]
+    )
+    return CapabilityRouter(
+        registry,
+        preferred_provider_ids=("blender-bridge",),
+    )
+
+
 # -- Scene tools --
 
 
@@ -104,8 +120,16 @@ def _get_conn(ctx: Context) -> BlenderConnection:
     description="Get information about the current Blender scene including name, frame range, render engine, resolution, and object count.",
 )
 async def scene_get_info(ctx: Context) -> str:
-    result = await _get_conn(ctx).send_command("scene.get_info")
-    return json.dumps(result, indent=2)
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="scene.get_info",
+    )
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(result.error or "scene.get_info failed")
+
+    return json.dumps(result.result, indent=2)
 
 
 @mcp.tool(
