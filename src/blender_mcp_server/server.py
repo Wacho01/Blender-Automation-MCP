@@ -722,8 +722,18 @@ async def export_fbx(ctx: Context, filepath: str) -> str:
     description="Undo the last operation in Blender.",
 )
 async def history_undo(ctx: Context) -> str:
-    result = await _get_conn(ctx).send_command("history.undo")
-    return json.dumps(result, indent=2)
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="history.undo",
+    )
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "history.undo failed"
+        )
+
+    return json.dumps(result.result, indent=2)
 
 
 @mcp.tool(
@@ -731,8 +741,18 @@ async def history_undo(ctx: Context) -> str:
     description="Redo the last undone operation in Blender.",
 )
 async def history_redo(ctx: Context) -> str:
-    result = await _get_conn(ctx).send_command("history.redo")
-    return json.dumps(result, indent=2)
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="history.redo",
+    )
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "history.redo failed"
+        )
+
+    return json.dumps(result.result, indent=2)
 
 
 # -- Python execution tools --
