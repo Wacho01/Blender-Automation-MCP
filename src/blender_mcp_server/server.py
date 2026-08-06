@@ -159,8 +159,17 @@ async def scene_list_objects(ctx: Context, type: str | None = None) -> str:
     description="Get the position, rotation, and scale of a Blender object by name.",
 )
 async def object_get_transform(ctx: Context, name: str) -> str:
-    result = await _get_conn(ctx).send_command("object.get_transform", {"name": name})
-    return json.dumps(result, indent=2)
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="object.get_transform",
+        parameters={"name": name},
+    )
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(result.error or "object.get_transform failed")
+
+    return json.dumps(result.result, indent=2)
 
 
 @mcp.tool(
@@ -168,11 +177,21 @@ async def object_get_transform(ctx: Context, name: str) -> str:
     description="Get the parent/child hierarchy of objects. If name is provided, returns the subtree for that object. Otherwise returns the full scene hierarchy.",
 )
 async def object_get_hierarchy(ctx: Context, name: str | None = None) -> str:
-    params = {}
+    parameters: dict[str, Any] = {}
     if name:
-        params["name"] = name
-    result = await _get_conn(ctx).send_command("object.get_hierarchy", params)
-    return json.dumps(result, indent=2)
+        parameters["name"] = name
+
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="object.get_hierarchy",
+        parameters=parameters,
+    )
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(result.error or "object.get_hierarchy failed")
+
+    return json.dumps(result.result, indent=2)
 
 
 @mcp.tool(
