@@ -137,11 +137,21 @@ async def scene_get_info(ctx: Context) -> str:
     description="List all objects in the current Blender scene. Optionally filter by type (MESH, CAMERA, LIGHT, EMPTY, CURVE, etc.).",
 )
 async def scene_list_objects(ctx: Context, type: str | None = None) -> str:
-    params = {}
+    parameters: dict[str, Any] = {}
     if type:
-        params["type"] = type
-    result = await _get_conn(ctx).send_command("scene.list_objects", params)
-    return json.dumps(result, indent=2)
+        parameters["type"] = type
+
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="scene.list_objects",
+        parameters=parameters,
+    )
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(result.error or "scene.list_objects failed")
+
+    return json.dumps(result.result, indent=2)
 
 
 @mcp.tool(
