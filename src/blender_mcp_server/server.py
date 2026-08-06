@@ -199,8 +199,18 @@ async def object_get_hierarchy(ctx: Context, name: str | None = None) -> str:
     description="List all materials in the Blender file.",
 )
 async def material_list(ctx: Context) -> str:
-    result = await _get_conn(ctx).send_command("material.list")
-    return json.dumps(result, indent=2)
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="material.list",
+    )
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "material.list failed"
+        )
+
+    return json.dumps(result.result, indent=2)
 
 
 # -- Object mutation tools --
@@ -379,39 +389,109 @@ async def object_duplicate(
     name="blender_material_create",
     description="Create a new material. Optionally set an initial base color as [r, g, b] with values 0-1.",
 )
-async def material_create(ctx: Context, name: str = "Material", color: list[float] | None = None) -> str:
-    params: dict[str, Any] = {"name": name}
+async def material_create(
+    ctx: Context,
+    name: str = "Material",
+    color: list[float] | None = None,
+) -> str:
+    parameters: dict[str, Any] = {"name": name}
     if color:
-        params["color"] = color
-    result = await _get_conn(ctx).send_command("material.create", params)
-    return json.dumps(result, indent=2)
+        parameters["color"] = color
+
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="material.create",
+        parameters=parameters,
+    )
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "material.create failed"
+        )
+
+    return json.dumps(result.result, indent=2)
 
 
 @mcp.tool(
     name="blender_material_assign",
     description="Assign an existing material to an object.",
 )
-async def material_assign(ctx: Context, object: str, material: str) -> str:
-    result = await _get_conn(ctx).send_command("material.assign", {"object": object, "material": material})
-    return json.dumps(result, indent=2)
+async def material_assign(
+    ctx: Context,
+    object: str,
+    material: str,
+) -> str:
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="material.assign",
+        parameters={
+            "object": object,
+            "material": material,
+        },
+    )
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "material.assign failed"
+        )
+
+    return json.dumps(result.result, indent=2)
 
 
 @mcp.tool(
     name="blender_material_set_color",
     description="Set the base color of a material. Color is [r, g, b] with values 0-1.",
 )
-async def material_set_color(ctx: Context, name: str, color: list[float]) -> str:
-    result = await _get_conn(ctx).send_command("material.set_color", {"name": name, "color": color})
-    return json.dumps(result, indent=2)
+async def material_set_color(
+    ctx: Context,
+    name: str,
+    color: list[float],
+) -> str:
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="material.set_color",
+        parameters={
+            "name": name,
+            "color": color,
+        },
+    )
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "material.set_color failed"
+        )
+
+    return json.dumps(result.result, indent=2)
 
 
 @mcp.tool(
     name="blender_material_set_texture",
     description="Set an image texture as the base color of a material. Provide the file path to the image.",
 )
-async def material_set_texture(ctx: Context, name: str, filepath: str) -> str:
-    result = await _get_conn(ctx).send_command("material.set_texture", {"name": name, "filepath": filepath})
-    return json.dumps(result, indent=2)
+async def material_set_texture(
+    ctx: Context,
+    name: str,
+    filepath: str,
+) -> str:
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="material.set_texture",
+        parameters={
+            "name": name,
+            "filepath": filepath,
+        },
+    )
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "material.set_texture failed"
+        )
+
+    return json.dumps(result.result, indent=2)
 
 
 # -- Render tools --
