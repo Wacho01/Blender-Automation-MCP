@@ -23,6 +23,7 @@ BLENDER_BRIDGE_CAPABILITIES = (
     "material.list",
     "material.set_color",
     "material.set_texture",
+    "mesh.extrude",
     "object.create_mesh",
     "object.delete",
     "object.duplicate",

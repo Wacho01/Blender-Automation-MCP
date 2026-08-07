@@ -63,6 +63,37 @@ class BridgeParams:
             if not isinstance(value, (int, float)) or isinstance(value, bool):
                 raise ValueError(f"Parameter '{name}' must be a number")
             value = float(value)
+        if expected == "int_list":
+            if not isinstance(value, list):
+                raise ValueError(
+                    f"Parameter '{name}' must be a list"
+                )
+
+            min_length = spec.get("min_length")
+            max_length = spec.get("max_length")
+
+            if min_length is not None and len(value) < min_length:
+                raise ValueError(
+                    f"Parameter '{name}' must have at least "
+                    f"{min_length} items"
+                )
+
+            if max_length is not None and len(value) > max_length:
+                raise ValueError(
+                    f"Parameter '{name}' must have at most "
+                    f"{max_length} items"
+                )
+
+            if any(
+                not isinstance(item, int) or isinstance(item, bool)
+                for item in value
+            ):
+                raise ValueError(
+                    f"Parameter '{name}' must contain only integers"
+                )
+
+            value = list(value)
+
         if expected == "number_list":
             if not isinstance(value, list):
                 raise ValueError(f"Parameter '{name}' must be a list")
@@ -164,6 +195,23 @@ class ObjectScaleParams(BridgeParams):
 
 class ObjectDuplicateParams(BridgeParams):
     fields = {"name": field("str", required=True), "new_name": field("str", allow_none=True)}
+
+
+class MeshExtrudeParams(BridgeParams):
+    fields = {
+        "name": field("str", required=True),
+        "face_indices": field(
+            "int_list",
+            required=True,
+            min_length=1,
+        ),
+        "offset": field(
+            "number_list",
+            required=True,
+            min_length=3,
+            max_length=3,
+        ),
+    }
 
 
 class MaterialCreateParams(BridgeParams):

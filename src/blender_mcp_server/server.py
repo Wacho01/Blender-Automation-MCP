@@ -382,6 +382,43 @@ async def object_duplicate(
     return json.dumps(result.result, indent=2)
 
 
+# -- Geometry editing tools --
+
+
+@mcp.tool(
+    name="blender_mesh_extrude",
+    description=(
+        "Extrude one or more faces of a mesh object by an explicit "
+        "3D offset vector."
+    ),
+)
+async def mesh_extrude(
+    ctx: Context,
+    name: str,
+    face_indices: list[int],
+    offset: list[float],
+) -> str:
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="mesh.extrude",
+        parameters={
+            "name": name,
+            "face_indices": face_indices,
+            "offset": offset,
+        },
+    )
+
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "mesh.extrude failed"
+        )
+
+    return json.dumps(result.result, indent=2)
+
+
+
 # -- Material tools --
 
 

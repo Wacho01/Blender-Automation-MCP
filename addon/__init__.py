@@ -35,6 +35,7 @@ from .models import (
     MaterialCreateParams,
     MaterialSetColorParams,
     MaterialSetTextureParams,
+    MeshExtrudeParams,
     ObjectCreateMeshParams,
     ObjectDeleteParams,
     ObjectDuplicateParams,
@@ -378,6 +379,7 @@ class CommandHandler:
         self._handlers["object.get_hierarchy"] = self._object_get_hierarchy
         self._handlers["material.list"] = self._material_list
         self._handlers["object.create_mesh"] = self._object_create_mesh
+        self._handlers["mesh.extrude"] = self._mesh_extrude
         self._handlers["object.delete"] = self._object_delete
         self._handlers["object.translate"] = self._object_translate
         self._handlers["object.rotate"] = self._object_rotate
@@ -405,6 +407,7 @@ class CommandHandler:
         "object.get_transform": ObjectGetTransformParams,
         "object.get_hierarchy": ObjectGetHierarchyParams,
         "object.create_mesh": ObjectCreateMeshParams,
+        "mesh.extrude": MeshExtrudeParams,
         "object.delete": ObjectDeleteParams,
         "object.translate": ObjectTranslateParams,
         "object.rotate": ObjectRotateParams,
@@ -605,6 +608,108 @@ class CommandHandler:
             "original": obj.name,
             "location": list(new_obj.location),
         }
+
+    # -- Geometry editing tools --
+
+    def _mesh_extrude(self, params: dict) -> dict:
+        import bmesh
+        from mathutils import Vector
+
+        name = params["name"]
+        face_indices = params["face_indices"]
+        offset = Vector(params["offset"])
+
+        obj = bpy.data.objects.get(name)
+
+        if obj is None:
+            raise ValueError(
+                f"Object '{name}' not found"
+            )
+
+        if obj.type != "MESH":
+            raise ValueError(
+                f"Object '{name}' is not a mesh"
+            )
+
+        mesh = obj.data
+        bm = bmesh.new()
+
+        try:
+            bm.from_mesh(mesh)
+            bm.faces.ensure_lookup_table()
+
+            face_count_before = len(bm.faces)
+
+            invalid_indices = [
+                index
+                for index in face_indices
+                if index < 0 or index >= face_count_before
+            ]
+
+            if invalid_indices:
+                raise ValueError(
+                    "Invalid face index/indices "
+                    f"{invalid_indices}; valid range is "
+                    f"0..{face_count_before - 1}"
+                )
+
+            faces = [
+                bm.faces[index]
+                for index in face_indices
+            ]
+
+            extrusion = bmesh.ops.extrude_face_region(
+                bm,
+                geom=faces,
+            )
+
+            new_geom = extrusion.get("geom", [])
+
+            new_vertices = [
+                element
+                for element in new_geom
+                if isinstance(
+                    element,
+                    bmesh.types.BMVert,
+                )
+            ]
+
+            if not new_vertices:
+                raise RuntimeError(
+                    "Blender extrusion created no vertices"
+                )
+
+            bmesh.ops.translate(
+                bm,
+                verts=new_vertices,
+                vec=offset,
+            )
+
+            bm.normal_update()
+
+            bm.verts.ensure_lookup_table()
+            bm.edges.ensure_lookup_table()
+            bm.faces.ensure_lookup_table()
+
+            vertex_count = len(bm.verts)
+            edge_count = len(bm.edges)
+            face_count = len(bm.faces)
+
+            bm.to_mesh(mesh)
+            mesh.update()
+
+            return {
+                "name": obj.name,
+                "face_indices": list(face_indices),
+                "offset": list(offset),
+                "vertex_count": vertex_count,
+                "edge_count": edge_count,
+                "face_count": face_count,
+            }
+
+        finally:
+            bm.free()
+
 
     # -- Material tools --
 
@@ -1303,6 +1408,7 @@ class BlenderMCPServer:
     # Commands that modify scene state and need undo push
     MUTATION_COMMANDS = {
         "object.create_mesh",
+        "mesh.extrude",
         "object.delete",
         "object.translate",
         "object.rotate",
