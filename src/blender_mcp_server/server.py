@@ -791,16 +791,30 @@ async def python_exec(
             factory_startup=factory_startup,
         )
     else:
-        params: dict[str, Any] = {}
+        parameters: dict[str, Any] = {}
         if code is not None:
-            params["code"] = code
+            parameters["code"] = code
         if script_path is not None:
-            params["script_path"] = script_path
+            parameters["script_path"] = script_path
         if args is not None:
-            params["args"] = args
+            parameters["args"] = args
         if timeout_seconds is not None:
-            params["timeout_seconds"] = timeout_seconds
-        result = await _get_conn(ctx).send_command("python.execute", params)
+            parameters["timeout_seconds"] = timeout_seconds
+
+        request = ProviderRequest(
+            request_id=str(uuid.uuid4()),
+            capability_id="python.execute",
+            parameters=parameters,
+        )
+        routed_result = await _get_router(ctx).execute(request)
+
+        if not routed_result.success:
+            raise RuntimeError(
+                routed_result.error or "python.execute failed"
+            )
+
+        result = routed_result.result
+
     return json.dumps(result, indent=2)
 
 
@@ -838,16 +852,30 @@ async def python_exec_async(
         )
         result = {"job_id": job_id}
     else:
-        params: dict[str, Any] = {}
+        parameters: dict[str, Any] = {}
         if code is not None:
-            params["code"] = code
+            parameters["code"] = code
         if script_path is not None:
-            params["script_path"] = script_path
+            parameters["script_path"] = script_path
         if args is not None:
-            params["args"] = args
+            parameters["args"] = args
         if timeout_seconds is not None:
-            params["timeout_seconds"] = timeout_seconds
-        result = await _get_conn(ctx).send_command("python.execute_async", params)
+            parameters["timeout_seconds"] = timeout_seconds
+
+        request = ProviderRequest(
+            request_id=str(uuid.uuid4()),
+            capability_id="python.execute_async",
+            parameters=parameters,
+        )
+        routed_result = await _get_router(ctx).execute(request)
+
+        if not routed_result.success:
+            raise RuntimeError(
+                routed_result.error or "python.execute_async failed"
+            )
+
+        result = routed_result.result
+
     return json.dumps(result, indent=2)
 
 
