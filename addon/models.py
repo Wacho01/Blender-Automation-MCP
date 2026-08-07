@@ -179,13 +179,13 @@ class MaterialAssignParams(BridgeParams):
 
 class MaterialSetColorParams(BridgeParams):
     fields = {
-        "material": field("str", required=True),
+        "name": field("str", required=True),
         "color": field("number_list", required=True, min_length=3, max_length=3),
     }
 
 
 class MaterialSetTextureParams(BridgeParams):
-    fields = {"material": field("str", required=True), "path": field("str", required=True)}
+    fields = {"name": field("str", required=True), "filepath": field("str", required=True)}
 
 
 class RenderStillParams(BridgeParams):
