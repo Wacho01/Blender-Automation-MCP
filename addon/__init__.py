@@ -36,6 +36,7 @@ from .models import (
     MaterialSetColorParams,
     MaterialSetTextureParams,
     MeshExtrudeParams,
+    MeshInsetParams,
     ObjectCreateMeshParams,
     ObjectDeleteParams,
     ObjectDuplicateParams,
@@ -380,6 +381,7 @@ class CommandHandler:
         self._handlers["material.list"] = self._material_list
         self._handlers["object.create_mesh"] = self._object_create_mesh
         self._handlers["mesh.extrude"] = self._mesh_extrude
+        self._handlers["mesh.inset"] = self._mesh_inset
         self._handlers["object.delete"] = self._object_delete
         self._handlers["object.translate"] = self._object_translate
         self._handlers["object.rotate"] = self._object_rotate
@@ -408,6 +410,7 @@ class CommandHandler:
         "object.get_hierarchy": ObjectGetHierarchyParams,
         "object.create_mesh": ObjectCreateMeshParams,
         "mesh.extrude": MeshExtrudeParams,
+        "mesh.inset": MeshInsetParams,
         "object.delete": ObjectDeleteParams,
         "object.translate": ObjectTranslateParams,
         "object.rotate": ObjectRotateParams,
@@ -702,6 +705,94 @@ class CommandHandler:
                 "name": obj.name,
                 "face_indices": list(face_indices),
                 "offset": list(offset),
+                "vertex_count": vertex_count,
+                "edge_count": edge_count,
+                "face_count": face_count,
+            }
+
+        finally:
+            bm.free()
+
+
+    def _mesh_inset(self, params: dict) -> dict:
+        import bmesh
+
+        name = params["name"]
+        face_indices = params["face_indices"]
+        thickness = params["thickness"]
+        depth = params.get("depth", 0.0)
+
+        obj = bpy.data.objects.get(name)
+
+        if obj is None:
+            raise ValueError(
+                f"Object '{name}' not found"
+            )
+
+        if obj.type != "MESH":
+            raise ValueError(
+                f"Object '{name}' is not a mesh"
+            )
+
+        mesh = obj.data
+        bm = bmesh.new()
+
+        try:
+            bm.from_mesh(mesh)
+            bm.faces.ensure_lookup_table()
+
+            face_count_before = len(bm.faces)
+
+            invalid_indices = [
+                index
+                for index in face_indices
+                if index < 0 or index >= face_count_before
+            ]
+
+            if invalid_indices:
+                raise ValueError(
+                    "Invalid face index/indices "
+                    f"{invalid_indices}; valid range is "
+                    f"0..{face_count_before - 1}"
+                )
+
+            faces = [
+                bm.faces[index]
+                for index in face_indices
+            ]
+
+            result = bmesh.ops.inset_region(
+                bm,
+                faces=faces,
+                thickness=thickness,
+                depth=depth,
+                use_boundary=True,
+                use_even_offset=True,
+                use_interpolate=True,
+                use_relative_offset=False,
+            )
+
+            bm.normal_update()
+
+            bm.verts.ensure_lookup_table()
+            bm.edges.ensure_lookup_table()
+            bm.faces.ensure_lookup_table()
+
+            vertex_count = len(bm.verts)
+            edge_count = len(bm.edges)
+            face_count = len(bm.faces)
+
+            inset_faces = result.get("faces", [])
+
+            bm.to_mesh(mesh)
+            mesh.update()
+
+            return {
+                "name": obj.name,
+                "face_indices": list(face_indices),
+                "thickness": float(thickness),
+                "depth": float(depth),
+                "inset_face_count": len(inset_faces),
                 "vertex_count": vertex_count,
                 "edge_count": edge_count,
                 "face_count": face_count,
@@ -1409,6 +1500,7 @@ class BlenderMCPServer:
     MUTATION_COMMANDS = {
         "object.create_mesh",
         "mesh.extrude",
+        "mesh.inset",
         "object.delete",
         "object.translate",
         "object.rotate",

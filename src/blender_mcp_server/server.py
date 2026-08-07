@@ -419,6 +419,42 @@ async def mesh_extrude(
 
 
 
+@mcp.tool(
+    name="blender_mesh_inset",
+    description=(
+        "Inset one or more mesh faces by an explicit thickness "
+        "and optional depth."
+    ),
+)
+async def mesh_inset(
+    ctx: Context,
+    name: str,
+    face_indices: list[int],
+    thickness: float,
+    depth: float = 0.0,
+) -> str:
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="mesh.inset",
+        parameters={
+            "name": name,
+            "face_indices": face_indices,
+            "thickness": thickness,
+            "depth": depth,
+        },
+    )
+
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "mesh.inset failed"
+        )
+
+    return json.dumps(result.result, indent=2)
+
+
+
 # -- Material tools --
 
 

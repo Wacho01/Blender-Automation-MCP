@@ -214,6 +214,26 @@ class MeshExtrudeParams(BridgeParams):
     }
 
 
+class MeshInsetParams(BridgeParams):
+    fields = {
+        "name": field("str", required=True),
+        "face_indices": field(
+            "int_list",
+            required=True,
+            min_length=1,
+        ),
+        "thickness": field(
+            "float",
+            required=True,
+            gt=0,
+        ),
+        "depth": field(
+            "float",
+            0.0,
+        ),
+    }
+
+
 class MaterialCreateParams(BridgeParams):
     fields = {
         "name": field("str", required=True),

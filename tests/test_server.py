@@ -91,7 +91,7 @@ class TestToolRegistration:
         assert "blender_job_list" in names
 
     def test_total_tool_count(self):
-        assert len(self._get_tool_names()) == 28
+        assert len(self._get_tool_names()) == 29
 
     def test_all_tools_have_descriptions(self):
         for tool in mcp._tool_manager._tools.values():
