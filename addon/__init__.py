@@ -614,11 +614,17 @@ class CommandHandler:
         mat.use_nodes = True
         color = params.get("color")
         if color:
+            # color is [r, g, b] or [r, g, b, a], values 0-1
+            rgba = list(color) + [1.0] * (4 - len(color))
+            rgba = rgba[:4]
+
+            # Sync viewport color
+            mat.diffuse_color = rgba
+
             bsdf = mat.node_tree.nodes.get("Principled BSDF")
             if bsdf:
-                # color is [r, g, b] or [r, g, b, a], values 0-1
-                rgba = list(color) + [1.0] * (4 - len(color))
-                bsdf.inputs["Base Color"].default_value = rgba[:4]
+                # Sync render color
+                bsdf.inputs["Base Color"].default_value = rgba
         return {"name": mat.name, "use_nodes": mat.use_nodes}
 
     def _material_assign(self, params: dict) -> dict:
@@ -648,8 +654,15 @@ class CommandHandler:
         if not bsdf:
             raise ValueError(f"Material '{mat_name}' has no Principled BSDF node")
         rgba = list(color) + [1.0] * (4 - len(color))
-        bsdf.inputs["Base Color"].default_value = rgba[:4]
-        return {"name": mat.name, "color": rgba[:4]}
+        rgba = rgba[:4]
+
+        # Sync viewport color
+        mat.diffuse_color = rgba
+
+        # Sync render color
+        bsdf.inputs["Base Color"].default_value = rgba
+
+        return {"name": mat.name, "color": rgba}
 
     def _material_set_texture(self, params: dict) -> dict:
         mat_name = params["name"]
