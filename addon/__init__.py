@@ -1219,18 +1219,86 @@ class BlenderMCPServer:
                         continue
                     try:
                         request = json.loads(line)
-                        response = self._submit_request(request)
+
+                        # Job-control requests must not wait behind a running
+                        # Blender main-thread job. These operations only touch
+                        # JobManager's lock-protected state / cancellation
+                        # event and therefore can be handled safely by the
+                        # client thread.
+                        if request.get("command") in {
+                            "job.status",
+                            "job.cancel",
+                            "job.list",
+                        }:
+                            response = self._process_job_control_request(
+                                request
+                            )
+                        else:
+                            response = self._submit_request(request)
+
                     except json.JSONDecodeError as e:
                         response = {
                             "id": None,
                             "success": False,
                             "error": f"Invalid JSON: {e}",
                         }
-                    conn.sendall(json.dumps(response).encode() + b"\n")
+
+                    conn.sendall(
+                        json.dumps(response).encode() + b"\n"
+                    )
         except Exception as e:
             logger.error(f"Client handler error: {e}")
         finally:
             conn.close()
+
+    @staticmethod
+    def _process_job_control_request(request: dict) -> dict:
+        """Process thread-safe job control without Blender's main queue."""
+        req_id = request.get("id")
+        command = request.get("command", "")
+        params = request.get("params", {})
+
+        try:
+            if not isinstance(params, dict):
+                raise ValueError("Job parameters must be an object")
+
+            if command == "job.status":
+                job_id = params.get("job_id")
+                if not isinstance(job_id, str) or not job_id:
+                    raise ValueError("'job_id' is required")
+                result = _job_manager.get_status(job_id)
+
+            elif command == "job.cancel":
+                job_id = params.get("job_id")
+                if not isinstance(job_id, str) or not job_id:
+                    raise ValueError("'job_id' is required")
+                result = _job_manager.cancel(job_id)
+
+            elif command == "job.list":
+                result = _job_manager.list_jobs()
+
+            else:
+                raise ValueError(
+                    f"Unsupported job-control command: {command}"
+                )
+
+            return {
+                "id": req_id,
+                "success": True,
+                "result": result,
+            }
+
+        except Exception as exc:
+            logger.error(
+                "Job-control command '%s' failed: %s",
+                command,
+                exc,
+            )
+            return {
+                "id": req_id,
+                "success": False,
+                "error": str(exc),
+            }
 
     # Commands that modify scene state and need undo push
     MUTATION_COMMANDS = {
