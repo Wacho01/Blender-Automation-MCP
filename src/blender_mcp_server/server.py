@@ -891,7 +891,20 @@ async def job_status(ctx: Context, job_id: str) -> str:
     if job_id.startswith("headless-job-"):
         result = HEADLESS_JOB_MANAGER.get_status(job_id)
     else:
-        result = await _get_conn(ctx).send_command("job.status", {"job_id": job_id})
+        request = ProviderRequest(
+            request_id=str(uuid.uuid4()),
+            capability_id="job.status",
+            parameters={"job_id": job_id},
+        )
+        routed_result = await _get_router(ctx).execute(request)
+
+        if not routed_result.success:
+            raise RuntimeError(
+                routed_result.error or "job.status failed"
+            )
+
+        result = routed_result.result
+
     return json.dumps(result, indent=2)
 
 
@@ -906,7 +919,20 @@ async def job_cancel(ctx: Context, job_id: str) -> str:
     if job_id.startswith("headless-job-"):
         result = await HEADLESS_JOB_MANAGER.cancel(job_id)
     else:
-        result = await _get_conn(ctx).send_command("job.cancel", {"job_id": job_id})
+        request = ProviderRequest(
+            request_id=str(uuid.uuid4()),
+            capability_id="job.cancel",
+            parameters={"job_id": job_id},
+        )
+        routed_result = await _get_router(ctx).execute(request)
+
+        if not routed_result.success:
+            raise RuntimeError(
+                routed_result.error or "job.cancel failed"
+            )
+
+        result = routed_result.result
+
     return json.dumps(result, indent=2)
 
 
@@ -916,12 +942,24 @@ async def job_cancel(ctx: Context, job_id: str) -> str:
 )
 async def job_list(ctx: Context) -> str:
     headless_jobs = HEADLESS_JOB_MANAGER.list_jobs()["jobs"]
-    try:
-        bridge_result = await _get_conn(ctx).send_command("job.list")
+
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="job.list",
+    )
+
+    routed_result = await _get_router(ctx).execute(request)
+
+    if routed_result.success:
+        bridge_result = routed_result.result or {}
         bridge_jobs = bridge_result.get("jobs", [])
-    except Exception:
+    else:
         bridge_jobs = []
-    result = {"jobs": bridge_jobs + headless_jobs}
+
+    result = {
+        "jobs": bridge_jobs + headless_jobs,
+    }
+
     return json.dumps(result, indent=2)
 
 
