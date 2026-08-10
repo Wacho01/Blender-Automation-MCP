@@ -40,6 +40,7 @@ from .models import (
     MeshExtrudeParams,
     MeshInsetParams,
     MeshLoopCutParams,
+    MeshSubdivideParams,
     ObjectCreateMeshParams,
     ObjectDeleteParams,
     ObjectDuplicateParams,
@@ -386,6 +387,7 @@ class CommandHandler:
         self._handlers["mesh.extrude"] = self._mesh_extrude
         self._handlers["mesh.inset"] = self._mesh_inset
         self._handlers["mesh.loop_cut"] = self._mesh_loop_cut
+        self._handlers["mesh.subdivide"] = self._mesh_subdivide
         self._handlers["mesh.bevel"] = self._mesh_bevel
         self._handlers["mesh.boolean"] = self._mesh_boolean
         self._handlers["object.delete"] = self._object_delete
@@ -418,6 +420,7 @@ class CommandHandler:
         "mesh.extrude": MeshExtrudeParams,
         "mesh.inset": MeshInsetParams,
         "mesh.loop_cut": MeshLoopCutParams,
+        "mesh.subdivide": MeshSubdivideParams,
         "mesh.bevel": MeshBevelParams,
         "mesh.boolean": MeshBooleanParams,
         "object.delete": ObjectDeleteParams,
@@ -1055,7 +1058,7 @@ class CommandHandler:
                     "Unable to resolve edge ring"
                 )
 
-            result = bmesh.ops.subdivide_edgering(
+            bmesh.ops.subdivide_edgering(
                 bm,
                 edges=list(ring_edges),
                 interp_mode="PATH",
@@ -1087,6 +1090,93 @@ class CommandHandler:
                 "edge_index": int(edge_index),
                 "cuts": int(cuts),
                 "ring_edge_count": len(ring_edges),
+                "created_edge_count": created_edge_count,
+                "vertex_count": vertex_count,
+                "edge_count": edge_count,
+                "face_count": face_count,
+            }
+
+        finally:
+            bm.free()
+
+
+    def _mesh_subdivide(self, params: dict) -> dict:
+        import bmesh
+
+        name = params["name"]
+        edge_indices = params["edge_indices"]
+        cuts = params.get("cuts", 1)
+        smooth = params.get("smooth", 0.0)
+
+        obj = bpy.data.objects.get(name)
+
+        if obj is None:
+            raise ValueError(
+                f"Object '{name}' not found"
+            )
+
+        if obj.type != "MESH":
+            raise ValueError(
+                f"Object '{name}' is not a mesh"
+            )
+
+        mesh = obj.data
+        bm = bmesh.new()
+
+        try:
+            bm.from_mesh(mesh)
+            bm.edges.ensure_lookup_table()
+
+            edge_count_before = len(bm.edges)
+
+            invalid_indices = [
+                index
+                for index in edge_indices
+                if index < 0 or index >= edge_count_before
+            ]
+
+            if invalid_indices:
+                raise ValueError(
+                    "Invalid edge index/indices "
+                    f"{invalid_indices}; valid range is "
+                    f"0..{edge_count_before - 1}"
+                )
+
+            edges = [
+                bm.edges[index]
+                for index in edge_indices
+            ]
+
+            bmesh.ops.subdivide_edges(
+                bm,
+                edges=edges,
+                cuts=cuts,
+                use_grid_fill=True,
+                smooth=smooth,
+            )
+
+            bm.normal_update()
+
+            bm.verts.ensure_lookup_table()
+            bm.edges.ensure_lookup_table()
+            bm.faces.ensure_lookup_table()
+
+            vertex_count = len(bm.verts)
+            edge_count = len(bm.edges)
+            face_count = len(bm.faces)
+
+            created_edge_count = (
+                edge_count - edge_count_before
+            )
+
+            bm.to_mesh(mesh)
+            mesh.update()
+
+            return {
+                "name": obj.name,
+                "edge_indices": list(edge_indices),
+                "cuts": int(cuts),
+                "smooth": float(smooth),
                 "created_edge_count": created_edge_count,
                 "vertex_count": vertex_count,
                 "edge_count": edge_count,
@@ -1797,6 +1887,7 @@ class BlenderMCPServer:
         "mesh.extrude",
         "mesh.inset",
         "mesh.loop_cut",
+        "mesh.subdivide",
         "mesh.bevel",
         "mesh.boolean",
         "object.delete",

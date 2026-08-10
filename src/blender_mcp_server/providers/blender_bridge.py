@@ -28,6 +28,7 @@ BLENDER_BRIDGE_CAPABILITIES = (
     "mesh.extrude",
     "mesh.inset",
     "mesh.loop_cut",
+    "mesh.subdivide",
     "object.create_mesh",
     "object.delete",
     "object.duplicate",

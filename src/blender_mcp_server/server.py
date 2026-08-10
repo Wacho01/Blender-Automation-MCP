@@ -560,6 +560,42 @@ async def mesh_loop_cut(
 
 
 
+@mcp.tool(
+    name="blender_mesh_subdivide",
+    description=(
+        "Subdivide one or more mesh edges with an explicit "
+        "cut count and smoothing amount."
+    ),
+)
+async def mesh_subdivide(
+    ctx: Context,
+    name: str,
+    edge_indices: list[int],
+    cuts: int = 1,
+    smooth: float = 0.0,
+) -> str:
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="mesh.subdivide",
+        parameters={
+            "name": name,
+            "edge_indices": edge_indices,
+            "cuts": cuts,
+            "smooth": smooth,
+        },
+    )
+
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "mesh.subdivide failed"
+        )
+
+    return json.dumps(result.result, indent=2)
+
+
+
 # -- Material tools --
 
 

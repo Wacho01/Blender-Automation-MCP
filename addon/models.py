@@ -279,6 +279,26 @@ class MeshLoopCutParams(BridgeParams):
     }
 
 
+class MeshSubdivideParams(BridgeParams):
+    fields = {
+        "name": field("str", required=True),
+        "edge_indices": field(
+            "int_list",
+            required=True,
+            min_length=1,
+        ),
+        "cuts": field(
+            "int",
+            1,
+            gt=0,
+        ),
+        "smooth": field(
+            "float",
+            0.0,
+        ),
+    }
+
+
 class MaterialCreateParams(BridgeParams):
     fields = {
         "name": field("str", required=True),

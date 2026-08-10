@@ -74,11 +74,11 @@ def test_blender_bridge_provider_reports_disconnected_state() -> None:
 
 
 def test_blender_bridge_capability_inventory() -> None:
-    assert len(BLENDER_BRIDGE_CAPABILITIES) == 32
+    assert len(BLENDER_BRIDGE_CAPABILITIES) == 33
     assert tuple(
         sorted(BLENDER_BRIDGE_CAPABILITIES)
     ) == BLENDER_BRIDGE_CAPABILITIES
-    assert len(set(BLENDER_BRIDGE_CAPABILITIES)) == 32
+    assert len(set(BLENDER_BRIDGE_CAPABILITIES)) == 33
 
     for capability_id in [
         "scene.get_info",
