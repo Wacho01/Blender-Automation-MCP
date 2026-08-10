@@ -255,6 +255,30 @@ class MeshBevelParams(BridgeParams):
     }
 
 
+class MeshBooleanParams(BridgeParams):
+    fields = {
+        "target_name": field("str", required=True),
+        "cutter_name": field("str", required=True),
+        "operation": field("str", required=True),
+        "delete_cutter": field("bool", True),
+    }
+
+
+class MeshLoopCutParams(BridgeParams):
+    fields = {
+        "name": field("str", required=True),
+        "edge_index": field(
+            "int",
+            required=True,
+        ),
+        "cuts": field(
+            "int",
+            1,
+            gt=0,
+        ),
+    }
+
+
 class MaterialCreateParams(BridgeParams):
     fields = {
         "name": field("str", required=True),

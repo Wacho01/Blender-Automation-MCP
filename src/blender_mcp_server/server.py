@@ -491,6 +491,75 @@ async def mesh_bevel(
 
 
 
+@mcp.tool(
+    name="blender_mesh_boolean",
+    description=(
+        "Apply a boolean operation between two mesh objects."
+    ),
+)
+async def mesh_boolean(
+    ctx: Context,
+    target_name: str,
+    cutter_name: str,
+    operation: str,
+    delete_cutter: bool = True,
+) -> str:
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="mesh.boolean",
+        parameters={
+            "target_name": target_name,
+            "cutter_name": cutter_name,
+            "operation": operation,
+            "delete_cutter": delete_cutter,
+        },
+    )
+
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "mesh.boolean failed"
+        )
+
+    return json.dumps(result.result, indent=2)
+
+
+
+@mcp.tool(
+    name="blender_mesh_loop_cut",
+    description=(
+        "Add one or more loop cuts through a mesh using an "
+        "explicit starting edge."
+    ),
+)
+async def mesh_loop_cut(
+    ctx: Context,
+    name: str,
+    edge_index: int,
+    cuts: int = 1,
+) -> str:
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="mesh.loop_cut",
+        parameters={
+            "name": name,
+            "edge_index": edge_index,
+            "cuts": cuts,
+        },
+    )
+
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "mesh.loop_cut failed"
+        )
+
+    return json.dumps(result.result, indent=2)
+
+
+
 # -- Material tools --
 
 

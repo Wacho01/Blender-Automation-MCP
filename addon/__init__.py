@@ -36,8 +36,10 @@ from .models import (
     MaterialSetColorParams,
     MaterialSetTextureParams,
     MeshBevelParams,
+    MeshBooleanParams,
     MeshExtrudeParams,
     MeshInsetParams,
+    MeshLoopCutParams,
     ObjectCreateMeshParams,
     ObjectDeleteParams,
     ObjectDuplicateParams,
@@ -383,7 +385,9 @@ class CommandHandler:
         self._handlers["object.create_mesh"] = self._object_create_mesh
         self._handlers["mesh.extrude"] = self._mesh_extrude
         self._handlers["mesh.inset"] = self._mesh_inset
+        self._handlers["mesh.loop_cut"] = self._mesh_loop_cut
         self._handlers["mesh.bevel"] = self._mesh_bevel
+        self._handlers["mesh.boolean"] = self._mesh_boolean
         self._handlers["object.delete"] = self._object_delete
         self._handlers["object.translate"] = self._object_translate
         self._handlers["object.rotate"] = self._object_rotate
@@ -413,7 +417,9 @@ class CommandHandler:
         "object.create_mesh": ObjectCreateMeshParams,
         "mesh.extrude": MeshExtrudeParams,
         "mesh.inset": MeshInsetParams,
+        "mesh.loop_cut": MeshLoopCutParams,
         "mesh.bevel": MeshBevelParams,
+        "mesh.boolean": MeshBooleanParams,
         "object.delete": ObjectDeleteParams,
         "object.translate": ObjectTranslateParams,
         "object.rotate": ObjectRotateParams,
@@ -881,6 +887,207 @@ class CommandHandler:
                 "width": float(width),
                 "segments": int(segments),
                 "beveled_geom_count": len(beveled_geom),
+                "vertex_count": vertex_count,
+                "edge_count": edge_count,
+                "face_count": face_count,
+            }
+
+        finally:
+            bm.free()
+
+
+    def _mesh_boolean(self, params: dict) -> dict:
+        target_name = params["target_name"]
+        cutter_name = params["cutter_name"]
+        operation = params["operation"].upper()
+        delete_cutter = params.get("delete_cutter", True)
+
+        if operation not in {
+            "UNION",
+            "DIFFERENCE",
+            "INTERSECT",
+        }:
+            raise ValueError(
+                "Boolean operation must be UNION, "
+                "DIFFERENCE, or INTERSECT"
+            )
+
+        target = bpy.data.objects.get(target_name)
+        cutter = bpy.data.objects.get(cutter_name)
+
+        if target is None:
+            raise ValueError(
+                f"Object '{target_name}' not found"
+            )
+
+        if cutter is None:
+            raise ValueError(
+                f"Object '{cutter_name}' not found"
+            )
+
+        if target.type != "MESH":
+            raise ValueError(
+                f"Object '{target_name}' is not a mesh"
+            )
+
+        if cutter.type != "MESH":
+            raise ValueError(
+                f"Object '{cutter_name}' is not a mesh"
+            )
+
+        if target == cutter:
+            raise ValueError(
+                "Target and cutter must be different objects"
+            )
+
+        modifier = target.modifiers.new(
+            name="MCP_Boolean",
+            type="BOOLEAN",
+        )
+
+        modifier.operation = operation
+        modifier.solver = "EXACT"
+        modifier.object = cutter
+
+        bpy.context.view_layer.objects.active = target
+        target.select_set(True)
+
+        for obj in bpy.context.selected_objects:
+            if obj != target:
+                obj.select_set(False)
+
+        try:
+            bpy.ops.object.modifier_apply(
+                modifier=modifier.name
+            )
+        except Exception:
+            if modifier.name in target.modifiers:
+                target.modifiers.remove(modifier)
+            raise
+
+        cutter_deleted = False
+
+        if delete_cutter:
+            bpy.data.objects.remove(
+                cutter,
+                do_unlink=True,
+            )
+            cutter_deleted = True
+
+        mesh = target.data
+        mesh.update()
+
+        return {
+            "target_name": target.name,
+            "cutter_name": cutter_name,
+            "operation": operation,
+            "delete_cutter": bool(delete_cutter),
+            "cutter_deleted": cutter_deleted,
+            "vertex_count": len(mesh.vertices),
+            "edge_count": len(mesh.edges),
+            "face_count": len(mesh.polygons),
+        }
+
+
+    def _mesh_loop_cut(self, params: dict) -> dict:
+        import bmesh
+
+        name = params["name"]
+        edge_index = params["edge_index"]
+        cuts = params.get("cuts", 1)
+
+        obj = bpy.data.objects.get(name)
+
+        if obj is None:
+            raise ValueError(
+                f"Object '{name}' not found"
+            )
+
+        if obj.type != "MESH":
+            raise ValueError(
+                f"Object '{name}' is not a mesh"
+            )
+
+        mesh = obj.data
+        bm = bmesh.new()
+
+        try:
+            bm.from_mesh(mesh)
+            bm.edges.ensure_lookup_table()
+
+            edge_count_before = len(bm.edges)
+
+            if edge_index < 0 or edge_index >= edge_count_before:
+                raise ValueError(
+                    f"Invalid edge index {edge_index}; "
+                    f"valid range is 0..{edge_count_before - 1}"
+                )
+
+            start_edge = bm.edges[edge_index]
+
+            ring_edges = {start_edge}
+            pending = [start_edge]
+
+            while pending:
+                edge = pending.pop()
+
+                for face in edge.link_faces:
+                    if len(face.edges) != 4:
+                        continue
+
+                    face_edges = list(face.edges)
+
+                    try:
+                        position = face_edges.index(edge)
+                    except ValueError:
+                        continue
+
+                    opposite = face_edges[
+                        (position + 2) % 4
+                    ]
+
+                    if opposite not in ring_edges:
+                        ring_edges.add(opposite)
+                        pending.append(opposite)
+
+            if not ring_edges:
+                raise RuntimeError(
+                    "Unable to resolve edge ring"
+                )
+
+            result = bmesh.ops.subdivide_edgering(
+                bm,
+                edges=list(ring_edges),
+                interp_mode="PATH",
+                smooth=0.0,
+                cuts=cuts,
+                profile_shape="SMOOTH",
+                profile_shape_factor=0.0,
+            )
+
+            bm.normal_update()
+
+            bm.verts.ensure_lookup_table()
+            bm.edges.ensure_lookup_table()
+            bm.faces.ensure_lookup_table()
+
+            vertex_count = len(bm.verts)
+            edge_count = len(bm.edges)
+            face_count = len(bm.faces)
+
+            created_edge_count = (
+                edge_count - edge_count_before
+            )
+
+            bm.to_mesh(mesh)
+            mesh.update()
+
+            return {
+                "name": obj.name,
+                "edge_index": int(edge_index),
+                "cuts": int(cuts),
+                "ring_edge_count": len(ring_edges),
+                "created_edge_count": created_edge_count,
                 "vertex_count": vertex_count,
                 "edge_count": edge_count,
                 "face_count": face_count,
@@ -1589,7 +1796,9 @@ class BlenderMCPServer:
         "object.create_mesh",
         "mesh.extrude",
         "mesh.inset",
+        "mesh.loop_cut",
         "mesh.bevel",
+        "mesh.boolean",
         "object.delete",
         "object.translate",
         "object.rotate",
