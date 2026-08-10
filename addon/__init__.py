@@ -35,6 +35,7 @@ from .models import (
     MaterialCreateParams,
     MaterialSetColorParams,
     MaterialSetTextureParams,
+    MeshBevelParams,
     MeshExtrudeParams,
     MeshInsetParams,
     ObjectCreateMeshParams,
@@ -382,6 +383,7 @@ class CommandHandler:
         self._handlers["object.create_mesh"] = self._object_create_mesh
         self._handlers["mesh.extrude"] = self._mesh_extrude
         self._handlers["mesh.inset"] = self._mesh_inset
+        self._handlers["mesh.bevel"] = self._mesh_bevel
         self._handlers["object.delete"] = self._object_delete
         self._handlers["object.translate"] = self._object_translate
         self._handlers["object.rotate"] = self._object_rotate
@@ -411,6 +413,7 @@ class CommandHandler:
         "object.create_mesh": ObjectCreateMeshParams,
         "mesh.extrude": MeshExtrudeParams,
         "mesh.inset": MeshInsetParams,
+        "mesh.bevel": MeshBevelParams,
         "object.delete": ObjectDeleteParams,
         "object.translate": ObjectTranslateParams,
         "object.rotate": ObjectRotateParams,
@@ -793,6 +796,91 @@ class CommandHandler:
                 "thickness": float(thickness),
                 "depth": float(depth),
                 "inset_face_count": len(inset_faces),
+                "vertex_count": vertex_count,
+                "edge_count": edge_count,
+                "face_count": face_count,
+            }
+
+        finally:
+            bm.free()
+
+
+    def _mesh_bevel(self, params: dict) -> dict:
+        import bmesh
+
+        name = params["name"]
+        edge_indices = params["edge_indices"]
+        width = params["width"]
+        segments = params.get("segments", 1)
+
+        obj = bpy.data.objects.get(name)
+
+        if obj is None:
+            raise ValueError(
+                f"Object '{name}' not found"
+            )
+
+        if obj.type != "MESH":
+            raise ValueError(
+                f"Object '{name}' is not a mesh"
+            )
+
+        mesh = obj.data
+        bm = bmesh.new()
+
+        try:
+            bm.from_mesh(mesh)
+            bm.edges.ensure_lookup_table()
+
+            edge_count_before = len(bm.edges)
+
+            invalid_indices = [
+                index
+                for index in edge_indices
+                if index < 0 or index >= edge_count_before
+            ]
+
+            if invalid_indices:
+                raise ValueError(
+                    "Invalid edge index/indices "
+                    f"{invalid_indices}; valid range is "
+                    f"0..{edge_count_before - 1}"
+                )
+
+            edges = [
+                bm.edges[index]
+                for index in edge_indices
+            ]
+
+            result = bmesh.ops.bevel(
+                bm,
+                geom=edges,
+                offset=width,
+                segments=segments,
+                affect="EDGES",
+            )
+
+            bm.normal_update()
+
+            bm.verts.ensure_lookup_table()
+            bm.edges.ensure_lookup_table()
+            bm.faces.ensure_lookup_table()
+
+            vertex_count = len(bm.verts)
+            edge_count = len(bm.edges)
+            face_count = len(bm.faces)
+
+            beveled_geom = result.get("geom", [])
+
+            bm.to_mesh(mesh)
+            mesh.update()
+
+            return {
+                "name": obj.name,
+                "edge_indices": list(edge_indices),
+                "width": float(width),
+                "segments": int(segments),
+                "beveled_geom_count": len(beveled_geom),
                 "vertex_count": vertex_count,
                 "edge_count": edge_count,
                 "face_count": face_count,
@@ -1501,6 +1589,7 @@ class BlenderMCPServer:
         "object.create_mesh",
         "mesh.extrude",
         "mesh.inset",
+        "mesh.bevel",
         "object.delete",
         "object.translate",
         "object.rotate",

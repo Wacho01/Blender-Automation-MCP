@@ -234,6 +234,27 @@ class MeshInsetParams(BridgeParams):
     }
 
 
+class MeshBevelParams(BridgeParams):
+    fields = {
+        "name": field("str", required=True),
+        "edge_indices": field(
+            "int_list",
+            required=True,
+            min_length=1,
+        ),
+        "width": field(
+            "float",
+            required=True,
+            gt=0,
+        ),
+        "segments": field(
+            "int",
+            1,
+            gt=0,
+        ),
+    }
+
+
 class MaterialCreateParams(BridgeParams):
     fields = {
         "name": field("str", required=True),

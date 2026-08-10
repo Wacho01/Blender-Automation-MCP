@@ -455,6 +455,42 @@ async def mesh_inset(
 
 
 
+@mcp.tool(
+    name="blender_mesh_bevel",
+    description=(
+        "Bevel one or more mesh edges by an explicit width "
+        "and segment count."
+    ),
+)
+async def mesh_bevel(
+    ctx: Context,
+    name: str,
+    edge_indices: list[int],
+    width: float,
+    segments: int = 1,
+) -> str:
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="mesh.bevel",
+        parameters={
+            "name": name,
+            "edge_indices": edge_indices,
+            "width": width,
+            "segments": segments,
+        },
+    )
+
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "mesh.bevel failed"
+        )
+
+    return json.dumps(result.result, indent=2)
+
+
+
 # -- Material tools --
 
 
