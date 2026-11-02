@@ -40,6 +40,7 @@ from .models import (
     MeshExtrudeParams,
     MeshInsetParams,
     MeshLoopCutParams,
+    MeshDissolveParams,
     MeshMergeParams,
     MeshSubdivideParams,
     ObjectCreateMeshParams,
@@ -388,6 +389,7 @@ class CommandHandler:
         self._handlers["mesh.extrude"] = self._mesh_extrude
         self._handlers["mesh.inset"] = self._mesh_inset
         self._handlers["mesh.loop_cut"] = self._mesh_loop_cut
+        self._handlers["mesh.dissolve"] = self._mesh_dissolve
         self._handlers["mesh.merge"] = self._mesh_merge
         self._handlers["mesh.subdivide"] = self._mesh_subdivide
         self._handlers["mesh.bevel"] = self._mesh_bevel
@@ -422,6 +424,7 @@ class CommandHandler:
         "mesh.extrude": MeshExtrudeParams,
         "mesh.inset": MeshInsetParams,
         "mesh.loop_cut": MeshLoopCutParams,
+        "mesh.dissolve": MeshDissolveParams,
         "mesh.merge": MeshMergeParams,
         "mesh.subdivide": MeshSubdivideParams,
         "mesh.bevel": MeshBevelParams,
@@ -1190,6 +1193,94 @@ class CommandHandler:
             bm.free()
 
 
+    def _mesh_dissolve(self, params: dict) -> dict:
+        import bmesh
+
+        name = params["name"]
+        element_type = params["element_type"].upper()
+        indices = params["indices"]
+
+        if element_type not in {"VERTS", "EDGES"}:
+            raise ValueError(
+                "Element type must be VERTS or EDGES"
+            )
+
+        obj = bpy.data.objects.get(name)
+
+        if obj is None:
+            raise ValueError(f"Object '{name}' not found")
+
+        if obj.type != "MESH":
+            raise ValueError(f"Object '{name}' is not a mesh")
+
+        mesh = obj.data
+        bm = bmesh.new()
+
+        try:
+            bm.from_mesh(mesh)
+            bm.verts.ensure_lookup_table()
+            bm.edges.ensure_lookup_table()
+
+            elements = (
+                bm.verts if element_type == "VERTS"
+                else bm.edges
+            )
+
+            count_before = len(elements)
+
+            invalid_indices = [
+                index for index in indices
+                if index < 0 or index >= count_before
+            ]
+
+            if invalid_indices:
+                raise ValueError(
+                    f"Invalid {element_type} indices "
+                    f"{invalid_indices}; valid range is "
+                    f"0..{count_before - 1}"
+                )
+
+            selected = [
+                elements[index]
+                for index in dict.fromkeys(indices)
+            ]
+
+            if element_type == "VERTS":
+                bmesh.ops.dissolve_verts(
+                    bm,
+                    verts=selected,
+                    use_face_split=False,
+                    use_boundary_tear=False,
+                )
+            else:
+                bmesh.ops.dissolve_edges(
+                    bm,
+                    edges=selected,
+                    use_verts=False,
+                    use_face_split=False,
+                )
+
+            bm.normal_update()
+
+            vertex_count = len(bm.verts)
+            edge_count = len(bm.edges)
+            face_count = len(bm.faces)
+
+            bm.to_mesh(mesh)
+            mesh.update()
+
+            return {
+                "name": obj.name,
+                "element_type": element_type,
+                "indices": list(indices),
+                "vertex_count": vertex_count,
+                "edge_count": edge_count,
+                "face_count": face_count,
+            }
+
+        finally:
+            bm.free()
+
     def _mesh_merge(self, params: dict) -> dict:
         import bmesh
 
@@ -1873,6 +1964,18 @@ class BlenderMCPServer:
 
     def stop(self):
         self._running = False
+        timers = bpy.app.timers
+        is_registered = getattr(timers, "is_registered", None)
+        unregister = getattr(timers, "unregister", None)
+        if callable(is_registered) and callable(unregister):
+            try:
+                if is_registered(self._drain_timer_callback):
+                    unregister(self._drain_timer_callback)
+            except Exception:
+                logger.debug(
+                    "Unable to unregister MCP Bridge queue timer",
+                    exc_info=True,
+                )
         if self._server_socket:
             self._server_socket.close()
             self._server_socket = None
@@ -2004,6 +2107,7 @@ class BlenderMCPServer:
         "mesh.extrude",
         "mesh.inset",
         "mesh.loop_cut",
+        "mesh.dissolve",
         "mesh.merge",
         "mesh.subdivide",
         "mesh.bevel",
@@ -2157,7 +2261,7 @@ class MCP_PT_Panel(bpy.types.Panel):
             layout.label(text=f"● Listening on {_server._host}:{_server._port}", icon="LINKED")
             layout.operator("mcp.stop_server", text="Stop Server")
         else:
-            layout.label(text="○ Server stopped", icon="UNLINKED")
+            layout.label(text="Ã¢â€”â€¹ Server stopped", icon="UNLINKED")
             layout.operator("mcp.start_server", text="Start Server")
 
         # Last script execution status

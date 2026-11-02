@@ -314,6 +314,18 @@ class MeshMergeParams(BridgeParams):
     }
 
 
+class MeshDissolveParams(BridgeParams):
+    fields = {
+        "name": field("str", required=True),
+        "element_type": field("str", required=True),
+        "indices": field(
+            "int_list",
+            required=True,
+            min_length=1,
+        ),
+    }
+
+
 class MaterialCreateParams(BridgeParams):
     fields = {
         "name": field("str", required=True),

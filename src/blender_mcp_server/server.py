@@ -1,4 +1,4 @@
-"""Blender MCP Server — External MCP server that bridges Claude Desktop to Blender."""
+"""Blender MCP Server â€” External MCP server that bridges Claude Desktop to Blender."""
 
 import asyncio
 import json
@@ -73,7 +73,7 @@ class BlenderConnection:
                     raise RuntimeError(response.get("error", "Unknown error from Blender"))
                 return response.get("result")
             except (ConnectionError, OSError) as e:
-                # Connection lost — reset and re-raise
+                # Connection lost â€” reset and re-raise
                 self._writer = None
                 self._reader = None
                 raise ConnectionError(f"Lost connection to Blender: {e}") from e
@@ -590,6 +590,40 @@ async def mesh_subdivide(
     if not result.success:
         raise RuntimeError(
             result.error or "mesh.subdivide failed"
+        )
+
+    return json.dumps(result.result, indent=2)
+
+
+
+@mcp.tool(
+    name="blender_mesh_dissolve",
+    description=(
+        "Dissolve selected vertices or edges of a Blender mesh. "
+        "element_type must be VERTS or EDGES."
+    ),
+)
+async def mesh_dissolve(
+    ctx: Context,
+    name: str,
+    element_type: str,
+    indices: list[int],
+) -> str:
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="mesh.dissolve",
+        parameters={
+            "name": name,
+            "element_type": element_type,
+            "indices": indices,
+        },
+    )
+
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "mesh.dissolve failed"
         )
 
     return json.dumps(result.result, indent=2)
