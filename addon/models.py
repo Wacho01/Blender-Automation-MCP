@@ -299,6 +299,21 @@ class MeshSubdivideParams(BridgeParams):
     }
 
 
+class MeshMergeParams(BridgeParams):
+    fields = {
+        "name": field("str", required=True),
+        "vertex_indices": field(
+            "int_list",
+            required=True,
+            min_length=2,
+        ),
+        "merge_type": field(
+            "str",
+            "CENTER",
+        ),
+    }
+
+
 class MaterialCreateParams(BridgeParams):
     fields = {
         "name": field("str", required=True),

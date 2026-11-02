@@ -596,6 +596,40 @@ async def mesh_subdivide(
 
 
 
+@mcp.tool(
+    name="blender_mesh_merge",
+    description=(
+        "Merge explicit mesh vertices using CENTER, FIRST, "
+        "or LAST merge behavior."
+    ),
+)
+async def mesh_merge(
+    ctx: Context,
+    name: str,
+    vertex_indices: list[int],
+    merge_type: str = "CENTER",
+) -> str:
+    request = ProviderRequest(
+        request_id=str(uuid.uuid4()),
+        capability_id="mesh.merge",
+        parameters={
+            "name": name,
+            "vertex_indices": vertex_indices,
+            "merge_type": merge_type,
+        },
+    )
+
+    result = await _get_router(ctx).execute(request)
+
+    if not result.success:
+        raise RuntimeError(
+            result.error or "mesh.merge failed"
+        )
+
+    return json.dumps(result.result, indent=2)
+
+
+
 # -- Material tools --
 
 

@@ -40,6 +40,7 @@ from .models import (
     MeshExtrudeParams,
     MeshInsetParams,
     MeshLoopCutParams,
+    MeshMergeParams,
     MeshSubdivideParams,
     ObjectCreateMeshParams,
     ObjectDeleteParams,
@@ -387,6 +388,7 @@ class CommandHandler:
         self._handlers["mesh.extrude"] = self._mesh_extrude
         self._handlers["mesh.inset"] = self._mesh_inset
         self._handlers["mesh.loop_cut"] = self._mesh_loop_cut
+        self._handlers["mesh.merge"] = self._mesh_merge
         self._handlers["mesh.subdivide"] = self._mesh_subdivide
         self._handlers["mesh.bevel"] = self._mesh_bevel
         self._handlers["mesh.boolean"] = self._mesh_boolean
@@ -420,6 +422,7 @@ class CommandHandler:
         "mesh.extrude": MeshExtrudeParams,
         "mesh.inset": MeshInsetParams,
         "mesh.loop_cut": MeshLoopCutParams,
+        "mesh.merge": MeshMergeParams,
         "mesh.subdivide": MeshSubdivideParams,
         "mesh.bevel": MeshBevelParams,
         "mesh.boolean": MeshBooleanParams,
@@ -1187,6 +1190,120 @@ class CommandHandler:
             bm.free()
 
 
+    def _mesh_merge(self, params: dict) -> dict:
+        import bmesh
+
+        name = params["name"]
+        vertex_indices = params["vertex_indices"]
+        merge_type = params.get(
+            "merge_type",
+            "CENTER",
+        ).upper()
+
+        if merge_type not in {
+            "CENTER",
+            "FIRST",
+            "LAST",
+        }:
+            raise ValueError(
+                "Merge type must be CENTER, FIRST, or LAST"
+            )
+
+        obj = bpy.data.objects.get(name)
+
+        if obj is None:
+            raise ValueError(
+                f"Object '{name}' not found"
+            )
+
+        if obj.type != "MESH":
+            raise ValueError(
+                f"Object '{name}' is not a mesh"
+            )
+
+        mesh = obj.data
+        bm = bmesh.new()
+
+        try:
+            bm.from_mesh(mesh)
+            bm.verts.ensure_lookup_table()
+
+            vertex_count_before = len(bm.verts)
+
+            invalid_indices = [
+                index
+                for index in vertex_indices
+                if index < 0 or index >= vertex_count_before
+            ]
+
+            if invalid_indices:
+                raise ValueError(
+                    "Invalid vertex index/indices "
+                    f"{invalid_indices}; valid range is "
+                    f"0..{vertex_count_before - 1}"
+                )
+
+            verts = [
+                bm.verts[index]
+                for index in vertex_indices
+            ]
+
+            if merge_type == "CENTER":
+                merge_co = sum(
+                    (vert.co for vert in verts),
+                    verts[0].co.copy() * 0.0,
+                ) / len(verts)
+
+                bmesh.ops.pointmerge(
+                    bm,
+                    verts=verts,
+                    merge_co=merge_co,
+                )
+
+            else:
+                target = (
+                    verts[0]
+                    if merge_type == "FIRST"
+                    else verts[-1]
+                )
+
+                bmesh.ops.pointmerge(
+                    bm,
+                    verts=verts,
+                    merge_co=target.co.copy(),
+                )
+
+            bm.normal_update()
+
+            bm.verts.ensure_lookup_table()
+            bm.edges.ensure_lookup_table()
+            bm.faces.ensure_lookup_table()
+
+            vertex_count = len(bm.verts)
+            edge_count = len(bm.edges)
+            face_count = len(bm.faces)
+
+            merged_vertex_count = (
+                vertex_count_before - vertex_count
+            )
+
+            bm.to_mesh(mesh)
+            mesh.update()
+
+            return {
+                "name": obj.name,
+                "vertex_indices": list(vertex_indices),
+                "merge_type": merge_type,
+                "merged_vertex_count": merged_vertex_count,
+                "vertex_count": vertex_count,
+                "edge_count": edge_count,
+                "face_count": face_count,
+            }
+
+        finally:
+            bm.free()
+
+
     # -- Material tools --
 
     def _material_create(self, params: dict) -> dict:
@@ -1887,6 +2004,7 @@ class BlenderMCPServer:
         "mesh.extrude",
         "mesh.inset",
         "mesh.loop_cut",
+        "mesh.merge",
         "mesh.subdivide",
         "mesh.bevel",
         "mesh.boolean",
